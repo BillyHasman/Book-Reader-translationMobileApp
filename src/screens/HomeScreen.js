@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
 import {
   View,
   Text,
@@ -7,19 +7,26 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
-  ScrollView,
   Modal,
   TextInput,
   Alert,
+  ScrollView,
+  Dimensions,
+  Platform,
 } from 'react-native'
+import { MaterialIcons } from '@expo/vector-icons'
 import { useBookStore } from '../store/useBookStore'
 import { pickAndSavePdf } from '../utils/fileHandler'
 import BookCard from '../components/BookCard'
+import CustomAlert from '../components/CustomAlert'
 
-export default function HomeScreen({ onOpenBook }) {
+const { width } = Dimensions.get('window')
+const isTablet = width > 700
+
+export default function HomeScreen({ onOpenBook, onOpenSettings }) {
   const {
     books,
-    addBook,
+    addMultipleBooks,
     categories,
     addCategory,
     moveBookCategory,
@@ -28,237 +35,328 @@ export default function HomeScreen({ onOpenBook }) {
 
   const [isGridView, setIsGridView] = useState(false)
   const [selectedTab, setSelectedTab] = useState('Semua')
-
+  const [isPickerVisible, setPickerVisible] = useState(false)
   const [isAddCatVisible, setAddCatVisible] = useState(false)
   const [newCatName, setNewCatName] = useState('')
-
   const [isMoveVisible, setMoveVisible] = useState(false)
   const [selectedBookForAction, setSelectedBookForAction] = useState(null)
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false,
+    title: '',
+    msg: '',
+    type: 'info',
+    onConfirm: () => {},
+  })
 
-  // --- LOGIC ---
+  const showAlert = useCallback(
+    (title, msg, type, onConfirm, confirmText = 'Ok') => {
+      setAlertConfig({
+        visible: true,
+        title,
+        msg,
+        type,
+        onConfirm,
+        confirmText,
+      })
+    },
+    []
+  )
+
+  const closeAlert = useCallback(
+    () => setAlertConfig({ ...alertConfig, visible: false }),
+    [alertConfig]
+  )
+
   const handleAddBook = async () => {
-    const book = await pickAndSavePdf()
-    if (book) {
-      addBook(book)
-      setSelectedTab('Semua')
+    const newBooksArray = await pickAndSavePdf()
+    if (!newBooksArray || newBooksArray.length === 0) return
+
+    let targetCategory = 'Uncategorized'
+    if (selectedTab !== 'Semua' && selectedTab !== 'Terbaru') {
+      targetCategory = selectedTab
+    }
+
+    const result = addMultipleBooks(newBooksArray, targetCategory)
+
+    if (result.added > 0 && result.duplicates === 0) {
+      showAlert(
+        'Sukses',
+        `Berhasil menambahkan ${result.added} buku.`,
+        'info',
+        closeAlert
+      )
+    } else if (result.added > 0 && result.duplicates > 0) {
+      showAlert(
+        'Selesai',
+        `${result.added} buku masuk.\n${result.duplicates} duplikat dilewati.`,
+        'info',
+        closeAlert
+      )
+    } else if (result.added === 0 && result.duplicates > 0) {
+      showAlert('Info', `Semua buku sudah ada.`, 'danger', closeAlert, 'Tutup')
     }
   }
 
   const handleCreateCategory = () => {
     if (newCatName.trim() === '') return
     addCategory(newCatName.trim())
+    setSelectedTab(newCatName.trim())
     setNewCatName('')
     setAddCatVisible(false)
   }
 
-  const onLongPressBook = (book) => {
+  const onLongPressBook = useCallback((book) => {
     setSelectedBookForAction(book)
     setMoveVisible(true)
-  }
+  }, [])
 
   const executeMoveCategory = (category) => {
     if (selectedBookForAction) {
       moveBookCategory(selectedBookForAction.id, category)
       setMoveVisible(false)
       setSelectedBookForAction(null)
-      Alert.alert('Berhasil', `Buku dipindah ke ${category}`)
     }
   }
 
   const executeDeleteBook = () => {
     if (selectedBookForAction) {
-      Alert.alert(
-        'Hapus Buku',
-        `Yakin ingin menghapus "${selectedBookForAction.name}"?`,
-        [
-          { text: 'Batal', style: 'cancel' },
-          {
-            text: 'Hapus',
-            style: 'destructive',
-            onPress: () => {
-              removeBook(selectedBookForAction.id)
-              setMoveVisible(false)
-            },
+      setMoveVisible(false)
+      setTimeout(() => {
+        showAlert(
+          'Hapus Buku?',
+          `Hapus "${selectedBookForAction.name}"?`,
+          'danger',
+          () => {
+            removeBook(selectedBookForAction.id)
+            closeAlert()
           },
-        ]
-      )
+          'Ya, Hapus'
+        )
+      }, 300)
     }
   }
 
-  const getDisplayedBooks = () => {
+  const displayedBooks = useMemo(() => {
     let result = [...books]
     if (selectedTab === 'Semua') return result.sort((a, b) => b.id - a.id)
     if (selectedTab === 'Terbaru')
       return result.sort((a, b) => b.lastReadTime - a.lastReadTime)
     return result.filter((book) => book.category === selectedTab)
-  }
+  }, [books, selectedTab])
+
+  const isCustomCategory = selectedTab !== 'Semua' && selectedTab !== 'Terbaru'
+  const categoryBtnLabel = isCustomCategory ? selectedTab : 'Kategori'
+
+  const renderItem = useCallback(
+    ({ item }) => (
+      <BookCard
+        book={item}
+        isGrid={isGridView}
+        onPress={() => onOpenBook(item)}
+        onLongPress={() => onLongPressBook(item)}
+      />
+    ),
+    [isGridView, onOpenBook, onLongPressBook]
+  )
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle='dark-content' backgroundColor='#ffffff' />
 
-      {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.topRow}>
-          <Text style={styles.title}>Book Reader 📚</Text>
-          <TouchableOpacity
-            onPress={() => setIsGridView(!isGridView)}
-            style={styles.viewBtn}
-          >
-            <Text style={{ fontSize: 24, color: '#333' }}>
-              {isGridView ? '📜' : '田'}
-            </Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <MaterialIcons
+              name='menu-book'
+              size={28}
+              color='#007AFF'
+              style={{ marginRight: 10 }}
+            />
+            <Text style={styles.title}>Book Reader</Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 15 }}>
+            <TouchableOpacity onPress={() => setIsGridView(!isGridView)}>
+              <MaterialIcons
+                name={isGridView ? 'view-list' : 'grid-view'}
+                size={28}
+                color='#333'
+              />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onOpenSettings}>
+              <MaterialIcons name='settings' size={28} color='#333' />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* NAVIGATION BAR */}
-        <View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.catScroll}
+        <View style={styles.navBar}>
+          <TouchableOpacity
+            style={[
+              styles.navBtn,
+              selectedTab === 'Semua' && styles.activeNavBtn,
+            ]}
+            onPress={() => setSelectedTab('Semua')}
           >
-            {/* Tab Statis */}
-            <TouchableOpacity
+            <Text
               style={[
-                styles.catTab,
-                selectedTab === 'Semua' && styles.activeCatTab,
+                styles.navText,
+                selectedTab === 'Semua' && styles.activeNavText,
               ]}
-              onPress={() => setSelectedTab('Semua')}
             >
-              <Text
-                style={[
-                  styles.catText,
-                  selectedTab === 'Semua' && styles.activeCatText,
-                ]}
-              >
-                Semua
-              </Text>
-            </TouchableOpacity>
+              Semua
+            </Text>
+          </TouchableOpacity>
 
-            <TouchableOpacity
+          <TouchableOpacity
+            style={[
+              styles.navBtn,
+              selectedTab === 'Terbaru' && styles.activeNavBtn,
+            ]}
+            onPress={() => setSelectedTab('Terbaru')}
+          >
+            <Text
               style={[
-                styles.catTab,
-                selectedTab === 'Terbaru' && styles.activeCatTab,
+                styles.navText,
+                selectedTab === 'Terbaru' && styles.activeNavText,
               ]}
-              onPress={() => setSelectedTab('Terbaru')}
             >
-              <Text
-                style={[
-                  styles.catText,
-                  selectedTab === 'Terbaru' && styles.activeCatText,
-                ]}
-              >
-                Terbaru
-              </Text>
-            </TouchableOpacity>
+              Terbaru
+            </Text>
+          </TouchableOpacity>
 
-            <View
-              style={{
-                width: 1,
-                height: 20,
-                backgroundColor: '#ddd',
-                marginHorizontal: 8,
-                alignSelf: 'center',
-              }}
+          <TouchableOpacity
+            style={[styles.navBtn, isCustomCategory && styles.activeNavBtn]}
+            onPress={() => setPickerVisible(true)}
+          >
+            <MaterialIcons
+              name='folder'
+              size={16}
+              color={isCustomCategory ? 'white' : '#666'}
+              style={{ marginRight: 5 }}
             />
-
-            {/* Tab User */}
-            {categories.map((cat, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.catTab,
-                  selectedTab === cat && styles.activeCatTab,
-                ]}
-                onPress={() => setSelectedTab(cat)}
-              >
-                <Text
-                  style={[
-                    styles.catText,
-                    selectedTab === cat && styles.activeCatText,
-                  ]}
-                >
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            ))}
-
-            {/* Tombol + */}
-            <TouchableOpacity
-              style={[
-                styles.catTab,
-                {
-                  backgroundColor: 'white',
-                  borderColor: '#007AFF',
-                  borderWidth: 1,
-                  borderStyle: 'dashed',
-                },
-              ]}
-              onPress={() => setAddCatVisible(true)}
+            <Text
+              style={[styles.navText, isCustomCategory && styles.activeNavText]}
+              numberOfLines={1}
             >
-              <Text style={{ color: '#007AFF', fontWeight: 'bold' }}>
-                + Kategori
-              </Text>
-            </TouchableOpacity>
+              {categoryBtnLabel}
+            </Text>
+            <MaterialIcons
+              name='arrow-drop-down'
+              size={16}
+              color={isCustomCategory ? 'white' : '#666'}
+            />
+          </TouchableOpacity>
 
-            <View style={{ width: 20 }} />
-          </ScrollView>
+          <TouchableOpacity
+            style={styles.plusBtn}
+            onPress={() => setAddCatVisible(true)}
+          >
+            <MaterialIcons name='add' size={24} color='#007AFF' />
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* LIST BUKU */}
       <FlatList
         key={isGridView ? 'grid' : 'list'}
-        data={getDisplayedBooks()}
+        data={displayedBooks}
         keyExtractor={(item) => item.id}
         numColumns={isGridView ? 2 : 1}
-        renderItem={({ item }) => (
-          <BookCard
-            book={item}
-            isGrid={isGridView}
-            onPress={() => onOpenBook(item)}
-            onLongPress={() => onLongPressBook(item)}
-          />
-        )}
+        renderItem={renderItem}
+        initialNumToRender={8}
+        maxToRenderPerBatch={5}
+        windowSize={5}
+        removeClippedSubviews={true}
+        updateCellsBatchingPeriod={50}
         ListEmptyComponent={
           <View style={styles.center}>
-            <Text style={{ fontSize: 50 }}>📂</Text>
+            <MaterialIcons name='folder-open' size={60} color='#ddd' />
             <Text style={{ color: '#666', marginTop: 10, fontWeight: 'bold' }}>
-              {selectedTab === 'Semua'
-                ? 'Belum ada buku.'
-                : selectedTab === 'Terbaru'
-                ? 'Belum ada riwayat baca.'
-                : `Kategori "${selectedTab}" kosong.`}
+              {selectedTab === 'Semua' ? 'Belum ada buku.' : `Kategori kosong.`}
             </Text>
           </View>
         }
-        contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+        contentContainerStyle={{ padding: 20, paddingBottom: 150 }}
       />
 
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, isTablet && styles.fabTablet]}
         onPress={handleAddBook}
         activeOpacity={0.8}
       >
-        <Text style={styles.fabText}>+</Text>
+        <MaterialIcons name='add' size={32} color='white' />
       </TouchableOpacity>
 
-      {/* MODAL 1: INPUT KATEGORI (FIXED TEXT COLOR) */}
+      <Modal visible={isPickerVisible} transparent animationType='fade'>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          onPress={() => setPickerVisible(false)}
+          activeOpacity={1}
+        >
+          <View style={styles.pickerContainer}>
+            <Text style={styles.modalTitle}>Pilih Kategori</Text>
+            <View
+              style={{ height: 1, backgroundColor: '#eee', marginBottom: 10 }}
+            />
+            <ScrollView style={{ maxHeight: 300 }}>
+              {categories.length === 0 ? (
+                <Text
+                  style={{ color: '#999', textAlign: 'center', padding: 20 }}
+                >
+                  Belum ada kategori.
+                </Text>
+              ) : (
+                categories.map((cat, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.pickerItem}
+                    onPress={() => {
+                      setSelectedTab(cat)
+                      setPickerVisible(false)
+                    }}
+                  >
+                    <View
+                      style={{ flexDirection: 'row', alignItems: 'center' }}
+                    >
+                      <MaterialIcons
+                        name='folder'
+                        size={20}
+                        color='#555'
+                        style={{ marginRight: 10 }}
+                      />
+                      <Text style={{ fontSize: 16, color: '#333' }}>{cat}</Text>
+                    </View>
+                    {selectedTab === cat && (
+                      <MaterialIcons name='check' size={20} color='#007AFF' />
+                    )}
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <CustomAlert
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.msg}
+        isDanger={alertConfig.type === 'danger'}
+        confirmText={alertConfig.confirmText}
+        onCancel={closeAlert}
+        onConfirm={alertConfig.onConfirm}
+      />
+
       <Modal visible={isAddCatVisible} transparent animationType='fade'>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Buat Kategori Baru</Text>
-
+            <Text style={styles.modalTitle}>Kategori Baru</Text>
             <TextInput
               style={styles.input}
-              placeholder='Misal: Komik, Jurnal...'
-              placeholderTextColor='#999' // <-- Warna Placeholder Jelas
+              placeholder='Nama kategori...'
+              placeholderTextColor='#999'
               value={newCatName}
               onChangeText={setNewCatName}
               autoFocus
             />
-
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 onPress={() => setAddCatVisible(false)}
@@ -270,55 +368,61 @@ export default function HomeScreen({ onOpenBook }) {
                 onPress={handleCreateCategory}
                 style={styles.btnSave}
               >
-                <Text style={{ color: 'white', fontWeight: 'bold' }}>
-                  Simpan
-                </Text>
+                <Text style={{ color: 'white' }}>Simpan</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* MODAL 2: PINDAH KATEGORI */}
-      <Modal visible={isMoveVisible} transparent animationType='slide'>
+      <Modal visible={isMoveVisible} transparent animationType='fade'>
         <TouchableOpacity
           style={styles.modalOverlay}
           onPress={() => setMoveVisible(false)}
+          activeOpacity={1}
         >
           <View style={styles.actionSheet}>
-            <Text style={styles.sheetTitle}>
-              Atur: {selectedBookForAction?.name}
+            <Text style={styles.sheetTitle}>Atur Buku</Text>
+            <Text style={styles.sheetSubtitle}>
+              {selectedBookForAction?.name}
             </Text>
-            <Text style={styles.sheetSubtitle}>Pindahkan ke kategori:</Text>
 
+            <Text
+              style={{
+                color: '#888',
+                fontSize: 12,
+                marginTop: 10,
+                marginBottom: 5,
+              }}
+            >
+              PINDAHKAN KE:
+            </Text>
             <View style={styles.chipContainer}>
-              {categories.length > 0 ? (
-                categories.map((cat, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.chip}
-                    onPress={() => executeMoveCategory(cat)}
-                  >
-                    <Text style={styles.chipText}>{cat}</Text>
-                  </TouchableOpacity>
-                ))
-              ) : (
-                <Text style={{ color: '#999', fontStyle: 'italic' }}>
-                  Belum ada kategori custom.
-                </Text>
-              )}
+              {categories.map((cat, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.chip}
+                  onPress={() => executeMoveCategory(cat)}
+                >
+                  <Text style={styles.chipText}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
-
             <View
               style={{ height: 1, backgroundColor: '#eee', marginVertical: 15 }}
             />
-
             <TouchableOpacity
               style={styles.btnDelete}
               onPress={executeDeleteBook}
             >
+              <MaterialIcons
+                name='delete'
+                size={20}
+                color='white'
+                style={{ marginRight: 8 }}
+              />
               <Text style={{ color: 'white', fontWeight: 'bold' }}>
-                🗑 Hapus Buku
+                Hapus Buku
               </Text>
             </TouchableOpacity>
           </View>
@@ -329,11 +433,10 @@ export default function HomeScreen({ onOpenBook }) {
 }
 
 const styles = StyleSheet.create({
-  // ... Styles Container & Header sama ...
-  container: { flex: 1, backgroundColor: '#f5f5f5', position: 'relative' },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
   header: {
     padding: 20,
-    paddingTop: 50,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 50,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
@@ -345,23 +448,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 15,
   },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#000000' },
-  viewBtn: { padding: 5 },
-
-  catScroll: { paddingBottom: 5 },
-  catTab: {
-    paddingHorizontal: 16,
+  title: { fontSize: 22, fontWeight: 'bold', color: '#000000' },
+  navBar: { flexDirection: 'row', gap: 8 },
+  navBtn: {
+    flex: 1,
     paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 5,
+    borderRadius: 8,
     backgroundColor: '#f5f5f5',
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: 'transparent',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  activeCatTab: { backgroundColor: '#333' },
-  catText: { color: '#666', fontWeight: '600' },
-  activeCatText: { color: 'white', fontWeight: 'bold' },
-
+  plusBtn: {
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: '#E3F2FD',
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  activeNavBtn: { backgroundColor: '#333' },
+  navText: { color: '#666', fontWeight: '600', fontSize: 12 },
+  activeNavText: { color: 'white', fontWeight: 'bold' },
   center: { alignItems: 'center', marginTop: 100 },
   fab: {
     position: 'absolute',
@@ -376,13 +486,26 @@ const styles = StyleSheet.create({
     zIndex: 999,
     elevation: 10,
   },
-  fabText: { color: 'white', fontSize: 32, marginTop: -4, fontWeight: 'bold' },
-
-  // --- STYLE MODAL YANG DIPERBAIKI ---
+  fabTablet: { bottom: 90, right: 50, width: 70, height: 70, borderRadius: 35 },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pickerContainer: {
+    backgroundColor: 'white',
+    width: '80%',
+    borderRadius: 15,
+    padding: 20,
+    elevation: 10,
+  },
+  pickerItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
     alignItems: 'center',
   },
   modalContent: {
@@ -398,7 +521,6 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     color: '#000',
   },
-
   input: {
     borderWidth: 1,
     borderColor: '#ddd',
@@ -406,10 +528,8 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 20,
     fontSize: 16,
-    color: '#000000', // <--- PAKSA HITAM BIAR KELIHATAN
-    backgroundColor: '#fff', // <--- PAKSA BACKGROUND PUTIH
+    color: '#000',
   },
-
   modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 15 },
   btnCancel: { padding: 10 },
   btnSave: {
@@ -418,7 +538,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
   },
-
   actionSheet: {
     position: 'absolute',
     bottom: 0,
@@ -451,5 +570,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
 })

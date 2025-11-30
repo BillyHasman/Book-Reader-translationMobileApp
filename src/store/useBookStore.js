@@ -8,7 +8,7 @@ export const useBookStore = create(
       books: [],
       categories: [],
 
-      // --- LOGIC UTAMA: ADD MULTIPLE ---
+      // LOGIC: ADD MULTIPLE
       addMultipleBooks: (newBooksArray, targetCategory = 'Uncategorized') => {
         const state = get()
         const existingBooks = state.books
@@ -42,7 +42,6 @@ export const useBookStore = create(
         return { added: addedCount, duplicates: duplicateCount }
       },
 
-      // --- CRUD LAINNYA ---
       moveBookCategory: (bookId, newCategory) =>
         set((state) => ({
           books: state.books.map((b) =>

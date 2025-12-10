@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "book-reader-app",
+    "name": "Book Reader",
     "slug": "book-reader-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/app-logo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/app-logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -17,7 +17,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/app-logo.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -29,16 +29,14 @@
       "package": "com.anonymous.bookreaderapp"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/app-logo.png"
     },
     "plugins": [
       [
         "expo-build-properties",
         {
           "android": {
-            "extraMavenRepos": [
-              "https://www.jitpack.io"
-            ]
+            "extraMavenRepos": ["https://www.jitpack.io"]
           }
         }
       ],

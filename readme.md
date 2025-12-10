@@ -1,57 +1,55 @@
-# SimpleBookReader
+# Book Reader App
 
-A minimalist offline book reader application focused on PDF documents with clean UI and simple navigation.
-
-## Style Guide
-
-Clean, minimalist design with ample whitespace and a calming color palette. The interface prioritizes readability and ease of use with a focus on content consumption rather than complex features.
-
-## Theme and Color Scheme
-
-- Primary Color: #2ecc71 (Green - for primary actions)
-- Secondary Color: #1abc9c (Teal - for secondary elements)
-- Accent Color: #3498db (Blue - for highlights and links)
-- Background: #f9f9f9 (Light gray - main background)
-- Surface: #ffffff (White - cards and containers)
-- Text: #2c3e50 (Dark gray - primary text)
-- Text Secondary: #7f8c8d (Gray - secondary text)
-- Border Radius: rounded-lg
-- Padding: p-6
-- Margin: m-4
+A mobile book reader application designed for PDF documents with real-time page translation to Indonesian. Built with a clean, minimalist UI that prioritizes readability and smooth navigation.
 
 ## Features
 
-1. **Book Library**: Displays all added books in a clean grid view
-2. **File Picker**: Add books from device storage (PDF focus)
-3. **Offline Reading**: All books stored locally on device
-4. **Minimal Reader**: Simple swipe navigation for PDFs
-5. **Local Storage**: Saves book metadata using AsyncStorage
-6. **Empty State**: Elegant empty library view when no books are added
+1. **PDF Reader**  
+   Open and read PDF books with swipe or scroll reading modes.
+
+2. **Real-Time Page Translation**  
+   Extracts text from each PDF page using OCR and translates it to Indonesian using on-device ML translation.
+
+3. **Smart Library System**  
+   Organize books by All Books, Recent Books, or custom categories.
+
+4. **Local Storage**  
+   Saves book metadata and categories locally for offline usage.
+
+5. **File Import**  
+   Add books from device storage using a simple file picker.
+
+6. **Minimal UI**  
+   Clean layout focused on smooth reading and distraction-free navigation.
 
 ## Technologies Used
 
-- React Native
-- Expo
-- NativeWind (Tailwind CSS for React Native)
-- AsyncStorage for local storage
-- Expo Document Picker for file selection
-- Lucide Icons for UI icons
+- React Native  
+- Expo  
+- `react-native-pdf` for PDF rendering  
+- `@react-native-ml-kit/text-recognition` for OCR  
+- `react-native-google-mlkit-translate` for on-device translation  
+- `react-native-view-shot` for capturing page snapshots  
+- Zustand (`useBookStore`) for state management  
+- Expo Document Picker & File System  
 
-## Installation Instructions
+## Installation
 
-1. Clone the repository
-2. Run `npm install` to install dependencies
-3. Run `npx expo start` to start the development server
-4. Use Expo Go app to preview on device or run on simulator
+1. Clone this repository  
+2. Run `npm install`  
+3. Start development server with `npx expo start`  
+4. Open the app using Expo Go or a simulator
 
-## Usage Instructions
+## How It Works
 
-1. Tap "Add Book" to select a PDF file from your device
-2. Your books will appear in the library
-3. Tap any book to open the reader
-4. Swipe left/right to navigate pages
-5. Use the page indicator to jump to specific pages
+1. Select a PDF file to add it to your library  
+2. Browse books under **All**, **Recent**, or **Custom Categories**  
+3. Read using swipe or scroll mode  
+4. Enable translation to convert each page into Indonesian  
+5. OCR extracts text, then on-device ML handles translation  
 
-```
+## Notes
 
-```
+- All features work offline except initial file import  
+- No API keys required. OCR and translation use on-device ML models  
+- Project built for learning and portfolio purposes  

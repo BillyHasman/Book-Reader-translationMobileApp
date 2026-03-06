@@ -62,7 +62,7 @@ export default function ReadingScreen({ book, onClose }) {
   const translateOnline = async (text) => {
     try {
       const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=id&dt=t&q=${encodeURIComponent(
-        text
+        text,
       )}`
       const response = await fetch(url)
       const data = await response.json()
@@ -78,16 +78,16 @@ export default function ReadingScreen({ book, onClose }) {
     setIsProcessing(true)
     setTranslatedPage(null)
     try {
-      setProcessStatus('📸 Memindai...')
+      setProcessStatus('Memindai...')
       await new Promise((r) => setTimeout(r, 500))
       const uri = await viewShotRef.current.capture()
-      setProcessStatus('👀 Membaca...')
+      setProcessStatus('Membaca...')
       const recognitionResult = await TextRecognition.recognize(uri)
       const rawText = recognitionResult.text
       const cleanedText = cleanTextSmartly(rawText)
       if (!cleanedText || cleanedText.length < 5)
         throw new Error('Tulisan tidak terbaca.')
-      setProcessStatus('🧠 Menerjemahkan...')
+      setProcessStatus('Menerjemahkan...')
       const result = await translateOnline(cleanedText)
       setTranslatedPage(result)
     } catch (error) {
